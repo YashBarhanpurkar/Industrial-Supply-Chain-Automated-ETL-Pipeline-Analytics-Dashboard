@@ -1,0 +1,14 @@
+# Data files — too large for GitHub
+data/raw/
+data/processed/
+data/archieve/
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.env
+
+# OS
+.DS_Store
+Thumbs.db

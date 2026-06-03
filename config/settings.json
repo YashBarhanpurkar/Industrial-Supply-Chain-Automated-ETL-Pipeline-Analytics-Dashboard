@@ -1,0 +1,103 @@
+{
+    "paths": {
+        "raw_dir":       "data/raw",
+        "processed_dir": "data/processed",
+        "quarantine_dir":"data/quarantine",
+        "archive_dir":   "data/archive",
+        "db_path":       "data/processed/SupplyChainOps.db"
+    },
+
+    "cleaning_rules": {
+        "date_cols": [
+            "order date (DateOrders)",
+            "shipping date (DateOrders)"
+        ],
+        "str_cols": [
+            "Type", "Delivery Status", "Order Status",
+            "Shipping Mode", "Customer Segment",
+            "Customer Fname", "Customer Lname",
+            "Customer City", "Customer State", "Customer Country",
+            "Order City", "Order State", "Order Country",
+            "Order Region", "Market",
+            "Department Name", "Category Name",
+            "Product Name"
+        ],
+        "drop_cols": [
+            "Product Description",
+            "Order Zipcode",
+            "Customer Email",
+            "Customer Password",
+            "Product Image",
+            "Customer Street",
+            "Benefit per order",
+            "Product Status",
+            "Order Item Total",
+            "Order Item Product Price"
+        ],
+        "geo_cols": [
+            "Market",
+            "Order Region",
+            "Order Country",
+            "Order State",
+            "Order City"
+        ],
+        "region_mapping": {
+            "South of  USA": "South US",
+            "South of USA":  "South US",
+            "West of USA":   "West US",
+            "West of USA ":  "West US",
+            "East of USA":   "East US",
+            "East of USA ":  "East US",
+            "US Center":     "Central US",
+            "US Center ":    "Central US"
+        },
+        "country_mapping": {
+            "EE. UU.":       "United States",
+            "Estados Unidos": "United States",
+            "Puerto Rico":   "Puerto Rico"
+        }
+    },
+
+    "customer_cols": [
+        "Customer Id", "Customer Segment",
+        "Customer Fname", "Customer Lname",
+        "Customer Zipcode", "Customer City",
+        "Customer State", "Customer Country",
+        "Latitude", "Longitude"
+    ],
+
+    "product_cols": [
+        "Product Card Id", "Product Category Id",
+        "Department Id", "Product Name", "Product Price"
+    ],
+
+    "product_category_cols": [
+        "Category Id", "Category Name"
+    ],
+
+    "product_department_cols": [
+        "Department Id", "Department Name"
+    ],
+
+    "order_header_cols": [
+        "Order Id", "Order Customer Id", "Geography_Key",
+        "Type", "Order Profit Per Order",
+        "Shipping Mode",
+        "Days for shipping (real)", "Days for shipment (scheduled)",
+        "Lead_Time_Deviation",
+        "order date (DateOrders)", "shipping date (DateOrders)",
+        "Delivery Status", "Order Status",
+        "Late_delivery_risk", "Sales per customer"
+    ],
+
+    "order_lineitem_cols": [
+        "Order Item Id", "Order Id",
+        "Order Item Cardprod Id",
+        "Order Item Quantity",
+        "Product Price",
+        "Order Item Discount Rate",
+        "Order Item Discount",
+        "Sales",
+        "Order Item Profit Ratio"
+    ]
+}

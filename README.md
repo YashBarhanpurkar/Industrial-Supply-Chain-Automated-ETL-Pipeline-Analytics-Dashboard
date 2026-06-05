@@ -1,6 +1,6 @@
 # Industrial Supply Chain — Automated ETL Pipeline & Analytics Dashboard
 
-> An enterprise-grade Python ETL framework that ingests, cleans, validates, and structures 180,000+ rows of global manufacturing logistics data into a relational Star Schema database — feeding a Power BI operational dashboard for delivery performance and carrier risk analysis.
+> An enterprise-grade Python ETL framework that ingests, cleans, validates, and structures 180,519 rows of global manufacturing logistics data into a relational Star Schema database — feeding a Power BI operational dashboard for delivery performance and carrier risk analysis.
 
 ---
 
@@ -38,12 +38,13 @@ This project builds an **automated ETL+V pipeline** (Extract, Transform, Validat
     ┌─ 2. TRANSFORM ───────────────────────────────┐
     │  • Date standardisation (str → datetime)      │
     │  • PII field removal (email, password, street)│
-    │  • Categorical uniformity (164-country        │
+    │  • Categorical uniformity (160+ country       │
     │    Spanish→English translation map)           │
     │  • Region name normalisation                  │
     │    ("South of USA" → "South US", etc.)        │
     │  • Composite Geography_Key synthesis          │
-    │    (Market + Region + Country hash)           │
+    │    (sequential surrogate key on unique        │
+    │     Market + Region + Country combos)         │
     │  • Lead_Time_Deviation engineered feature     │
     │    (actual days − scheduled days)             │
     │  • Duplicate column removal                   │
@@ -51,8 +52,8 @@ This project builds an **automated ETL+V pipeline** (Extract, Transform, Validat
            │
            ▼
     ┌─ 3. VALIDATE & QUARANTINE ───────────────────┐
-    │  • Anomaly detection (corrupt zip codes,      │
-    │    malformed state fields)                    │
+    │  • Anomaly detection (zip codes stored as     │
+    │    state identifiers, null location fields)   │
     │  • Known bad rows → data/quarantine/          │
     │    (isolated without disrupting runtime)      │
     │  • Clean rows pass through                    │
@@ -84,25 +85,26 @@ This project builds an **automated ETL+V pipeline** (Extract, Transform, Validat
 
 ## Key Engineering Decisions
 
-### 1. Config-Driven Architecture (Zero Hardcoding)
-All schema definitions, directory paths, column mappings, and cleaning rules are externalised to `config/settings.json`. The Python execution logic contains no hardcoded column names or file paths — meaning the pipeline adapts to schema changes without code modification:
+### 1. Config-Driven Schema (Minimal Hardcoding)
+All schema definitions, directory paths, column mappings, and date/string cleaning rules are externalised to `config/settings.json`. The Python execution logic contains no hardcoded column names or file paths — meaning the pipeline adapts to schema changes without modifying `pipeline.py`:
 
 ```json
 {
   "order_header_cols": ["Order Id", "Geography_Key", "Shipping Mode",
                         "Days for shipping (real)", "Lead_Time_Deviation", ...],
   "cleaning_rules": {
-    "region_mapping": { "South of USA": "South US", "West of USA": "West US" },
-    "country_mapping": { "EE. UU.": "United States", "Alemania": "Germany" }
+    "region_mapping": { "South of USA": "South US", "West of USA": "West US" }
   }
 }
 ```
 
+> Note: The 160+ country Spanish→English translation map is defined in `src/utils.py` rather than the config file, as embedding a full translation dictionary in JSON is impractical at that scale.
+
 ### 2. Composite Geography Key Synthesis
-Rather than joining on inconsistent free-text location strings (which fail on whitespace variants and translations), the pipeline generates a composite `Geography_Key` by hashing `Market + Order Region + Order Country`. This creates a stable FK anchor for the geography dimension — the same approach used in production data warehouses to handle multi-source location data.
+Rather than joining on inconsistent free-text location strings (which fail on whitespace variants and translations), the pipeline generates a surrogate `Geography_Key` from the unique set of `Market + Order Region + Order Country + Order State + Order City` combinations. This creates a stable FK anchor for the geography dimension — the same approach used in production data warehouses to handle multi-source location data.
 
 ### 3. Quarantine-Not-Crash Validation
-Instead of halting on bad data, the pipeline isolates known anomalies (corrupt zip codes used as state identifiers, null location fields) into a decoupled quarantine zone — logging them for manual review without interrupting the main processing run. This is the correct pattern for production pipelines where data quality is imperfect but the run must complete.
+Instead of halting on bad data, the pipeline isolates known anomalies into a decoupled quarantine zone — logging them for manual review without interrupting the main processing run. This is the correct pattern for production pipelines where data quality is imperfect but the run must complete.
 
 ### 4. Fact Table Splitting by Analytical Purpose
 Rather than one monolithic fact table, execution metrics are split into two targeted tables by analytical granularity:
@@ -118,11 +120,13 @@ This prevents row-bloat calculations and avoids many-to-many relationship traps 
 EDA conducted on the raw 180,519-row dataset (`notebooks/Exploratory Data Analysis.ipynb`):
 
 - Identified **duplicate columns** (`Benefit per order` = `Order Profit Per Order`) → dropped
-- Identified **dead columns** (`Product Status` — single value across all rows) → dropped
+- Identified **dead columns** (`Product Status` — single value of 0 across all 180,519 rows) → dropped
 - Identified **PII fields** requiring removal (Customer Email, Password, Street) → quarantined
-- Discovered **mixed-type state fields** (zip codes stored as state names in 2 records) → corrected
+- Identified **duplicate relationship columns** (`Customer Id` = `Order Customer Id`, `Product Card Id` = `Order Item Cardprod Id`) → redundant copies dropped
+- Discovered **3 records where zip codes were stored as state identifiers** (zip codes `95758` and `91732` found in the `Customer State` field) → state corrected to `CA`, zip restored, city set to `Unknown`, rows quarantined
 - Engineered **`Lead_Time_Deviation`** feature: `Days for shipping (real) − Days for shipment (scheduled)` → key metric for delivery performance analysis
-- Confirmed **Late_delivery_risk** flag aligns with Lead_Time_Deviation > 0 via cross-tabulation
+- Confirmed **`Late_delivery_risk` flag aligns with `Lead_Time_Deviation > 0`** via cross-tabulation (all risk=1 rows have positive deviation; `Shipping canceled` orders with positive deviation are correctly excluded from the flag)
+- Confirmed **86.2% of `Order Zipcode` values are null** — column dropped from fact table
 
 ---
 
@@ -135,6 +139,8 @@ With the pipeline output stable, the `Fact_Order_Header` table (logistics-focuse
 - **Lead Time Deviation Trend** — actual vs. scheduled shipping days over time
 - **Order Volume by Market** — geographic distribution of fulfilment operations
 
+Dashboard screenshots are available in `Screenshots/`.
+
 ---
 
 ## Technical Stack
@@ -143,12 +149,12 @@ With the pipeline output stable, the `Fact_Order_Header` table (logistics-focuse
 |---|---|
 | ETL Orchestration | Python 3 (`pipeline.py`) |
 | Data Transformation | Pandas (type enforcement, reshaping, feature engineering) |
-| Database Layer | SQLite3, SQLAlchemy (star schema population) |
+| Database Layer | SQLite3 (star schema population) |
 | Configuration Engine | JSON (`settings.json`) |
 | Logging | Python `logging` module (structured pipeline audit trail) |
 | EDA | Jupyter Notebook, Matplotlib, Seaborn |
 | Visualisation | Power BI Desktop (`Dashboard.pbix`) |
-| Dataset | DataCo Global Supply Chain Dataset (180,519 rows) |
+| Dataset | DataCo Global Supply Chain Dataset (180,519 rows × 53 columns) |
 
 ---
 
@@ -158,11 +164,12 @@ With the pipeline output stable, the `Fact_Order_Header` table (logistics-focuse
 supply-chain-analytics-dashboard/
 │
 ├── config/
-│   └── settings.json                  # Central config: paths, schemas, mapping rules
+│   └── settings.json                  # Central config: paths, schemas, cleaning rules
 │
 ├── src/
 │   ├── pipeline.py                    # ETL lifecycle orchestrator
-│   └── utils.py                       # Transform functions, validation, DB loader
+│   └── utils.py                       # Transform functions, validation, DB loader,
+│                                      #   country/region translation maps
 │
 ├── notebooks/
 │   └── Exploratory Data Analysis.ipynb  # EDA: profiling, cleaning decisions, feature engineering
@@ -174,6 +181,7 @@ supply-chain-analytics-dashboard/
 │   ├── archive/                       # Processed source files (idempotent safeguard)
 │   └── quarantine/                    # Isolated anomalous rows for review
 │
+├── Screenshots/                       # Power BI dashboard page exports (4 pages)
 ├── Dashboard.pbix                     # Power BI report (connects to Fact_Order_Header)
 └── requirements.txt
 ```
@@ -203,8 +211,8 @@ cd supply-chain-analytics-dashboard
 pip install -r requirements.txt
 
 # Drop your raw CSV into data/raw/
-# Then run:
-python src/pipeline.py
+# Then run from the project root:
+python -m src.pipeline
 
 # Outputs:
 #  → data/processed/SupplyChainOps.db  (SQLite star schema)
@@ -216,8 +224,8 @@ python src/pipeline.py
 
 ## Author
 
-**Yash Barhanpurkar**  
-M.Sc. Global Production Engineering — Technische Universität Berlin  
+**Yash Barhanpurkar**
+M.Sc. Global Production Engineering — Technische Universität Berlin
 [LinkedIn](https://www.linkedin.com/in/yash-barhanpurkar/) · [GitHub](https://github.com/YashBarhanpurkar)
 
 ---

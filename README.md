@@ -84,8 +84,8 @@ This project builds an **automated ETL+V pipeline** (Extract, Transform, Validat
 
 ## Key Engineering Decisions
 
-### 1. Config-Driven Architecture (Zero Hardcoding)
-All schema definitions, directory paths, column mappings, and cleaning rules are externalised to `config/settings.json`. The Python execution logic contains no hardcoded column names or file paths — meaning the pipeline adapts to schema changes without code modification:
+### 1. Config-Driven Architecture
+All schema definitions, directory paths, column mappings, and cleaning rules are externalised to `config/settings.json`.
 
 ```json
 {
